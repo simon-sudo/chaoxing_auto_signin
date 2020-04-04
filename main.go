@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gocolly/colly"
-	"go_dev/chaoxing_auto_signIn/config"
 	"io"
 	"io/ioutil"
 	"log"
@@ -17,6 +16,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var userInfoMap = make(map[string]string)
@@ -35,6 +35,7 @@ type Config struct {
 }
 var conf Config
 func init() {
+	//configPath := "src/go_dev/chaoxing_auto_signIn/config/user.json"
 	configPath,_ :=os.Getwd()
 	configPath += "/config/user.json"
 	data,err := ioutil.ReadFile(configPath)
@@ -67,18 +68,18 @@ func main() {
 		log.Println("登录错误：", err)
 		return
 	}
-
-	//处理课程活动页面
-	for ind,_ := range conf.ClassId{
-		course := Course{
-			CourseId: conf.CourseId[ind],
-			ClassId:  conf.ClassId[ind],
-		}
-		coursePage := loginOp.Clone()
-		handleCourse(coursePage,course)
-	}
 	for {
-		fmt.Print()
+		//处理课程活动页面
+		fmt.Println("Fxck chaoxing")
+		for ind := range conf.ClassId {
+			course := Course{
+				CourseId: conf.CourseId[ind],
+				ClassId:  conf.ClassId[ind],
+			}
+			coursePage := loginOp.Clone()
+			handleCourse(coursePage, course)
+		}
+		time.Sleep(time.Second*60)
 	}
 }
 func handleCourse(coursePage *colly.Collector,course Course) {
@@ -88,13 +89,13 @@ func handleCourse(coursePage *colly.Collector,course Course) {
 		reg2 := regexp.MustCompile(`,\d+,`)
 		activeId := reg1.FindString(s)
 		activeType := reg2.FindString(s)
-		activeId = activeId[1:len(activeId)]
+		activeId = activeId[1:]
 		activeType = activeType[1 : len(activeType)-1]
 		activeOp := coursePage.Clone()
 		handleActive(activeOp, activeType, activeId, "https://mobilelearn.chaoxing.com/widget/sign/pcStuSignController/preSign?activeId="+activeId+"&classId="+course.ClassId+"&fid="+userInfoMap["fid"]+"&courseId="+course.CourseId)
 	})
 
-	coursePage.Visit("https://mobilelearn.chaoxing.com/widget/pcpick/stu/index?courseId=" + course.CourseId + "&jclassId=" + course.ClassId)
+	_ = coursePage.Visit("https://mobilelearn.chaoxing.com/widget/pcpick/stu/index?courseId=" + course.CourseId + "&jclassId=" + course.ClassId)
 }
 func CreateCollector() *colly.Collector {
 	coll := colly.NewCollector()
@@ -109,14 +110,15 @@ func CreateCollector() *colly.Collector {
 }
 func handleLogin(loginUrl string) (*colly.Collector, error) {
 	loginOp := CreateCollector()
+	loginOp.OnResponse(func(res *colly.Response) {
+
+	})
+	fmt.Println(conf)
 	err := loginOp.Post(loginUrl, map[string]string{
-		"name":    config.Account,
-		"account": config.Account,
-		"pwd":     config.Pwd,
-		"fid":     config.Fid,
-		"verify":  config.Verify,
-		"token":   "",
-		"uid":     "",
+		"name":    conf.Account,
+		"pwd":     conf.Pwd,
+		"fid":     conf.Fid,
+		"verify":  conf.Verify,
 	})
 	if err != nil {
 		log.Println("登陆出错：", err)
@@ -143,11 +145,11 @@ func handleSignin(activeOp *colly.Collector, activeId, url string) {
 	fmt.Println("处理签到活动：", activeId)
 	resBody := string(normalSignin(activeOp, url).Body)
 	if strings.Index(resBody, "签到成功") != -1 {
-		fmt.Println("签到成功或已签到！")
+		fmt.Println("签到成功或已签到")
 		return
 	}
 	if strings.Index(resBody, "拍照签到") != -1 {
-		fmt.Println("开始拍照签到！")
+		//fmt.Println("开始拍照签到！")
 		photoUploadOp := activeOp.Clone()
 		resBody = photoSignin(photoUploadOp, activeId)
 		if strings.Index(resBody, "success") != -1 {
@@ -157,7 +159,7 @@ func handleSignin(activeOp *colly.Collector, activeId, url string) {
 		}
 
 	} else if strings.Index(resBody, "手势签到") != -1 {
-		fmt.Println("开始手势签到！")
+		//fmt.Println("开始手势签到！")
 		gestureSigninOp := activeOp.Clone()
 		resBody = gestureSignin(gestureSigninOp,activeId)
 		if strings.Index(resBody, "success") != -1 {
@@ -172,7 +174,7 @@ func normalSignin(activeOp *colly.Collector, url string) *colly.Response {
 	activeOp.OnResponse(func(resp *colly.Response) {
 		res = resp
 	})
-	activeOp.Visit(url)
+	_ = activeOp.Visit(url)
 	return res
 }
 
@@ -188,7 +190,7 @@ func photoSignin(photoSigninOp *colly.Collector, activeId string) string {
 		resBody = string(res.Body)
 	})
 	err = photoSigninOp.Post(url, map[string]string{
-		"name":     config.Name,
+		"name":     conf.Name,
 		"activeId": activeId,
 		"uid":      userInfoMap["uid"],
 		"objectId": objectId,
@@ -201,8 +203,8 @@ func gestureSignin(gestureSigninOp *colly.Collector, activeId string)string {
 	gestureSigninOp.OnResponse(func(res *colly.Response) {
 		resBody = string(res.Body)
 	})
-	gestureSigninOp.Post(url,map[string]string{
-		"name":     config.Name,
+	_ = gestureSigninOp.Post(url,map[string]string{
+		"name":     conf.Name,
 		"activeId": activeId,
 		"uid":      userInfoMap["uid"],
 	})
@@ -221,7 +223,7 @@ func token(tokenOp *colly.Collector) string {
 		}
 		tokenStr = m.Token
 	})
-	tokenOp.Visit("https://pan-yz.chaoxing.com/api/token/uservalid")
+	_ = tokenOp.Visit("https://pan-yz.chaoxing.com/api/token/uservalid")
 	return tokenStr
 }
 func photoUpload(photoUploadOp *colly.Collector) (string, error) {
@@ -271,7 +273,7 @@ func photoUpload(photoUploadOp *colly.Collector) (string, error) {
 		Result   bool   `json"result"`
 	}
 	var resData uploadRes
-	json.Unmarshal(body, &resData)
+	_ = json.Unmarshal(body, &resData)
 	if resData.Result == false {
 		return "图片上传失败", err
 	}
