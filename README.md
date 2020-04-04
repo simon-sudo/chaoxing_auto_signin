@@ -25,7 +25,7 @@
 
 `user.json` 
 
-```json
+```c
 {
    "CourseId": [	//课程ID，不需要自己填
    ],
