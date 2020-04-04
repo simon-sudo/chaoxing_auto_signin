@@ -1,9 +1,14 @@
 {
-  "CourseId":   [],
-  "ClassId":    [],
-  "Account":    "",
-  "Pwd":        "",
-  "Verify":     "",
-  "Fid":        "",
-  "Name":       ""
+   "CourseId": [
+   ],
+   "ClassId": [
+   ],
+   "CourseName": [
+      "自动化测试"
+   ],
+   "Account": "",
+   "Pwd": "",
+   "Verify": "",
+   "Fid": "",
+   "Name": ""
 }
