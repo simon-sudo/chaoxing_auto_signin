@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/gocolly/colly"
 	"io/ioutil"
 	"log"
@@ -37,6 +38,11 @@ func init() {
 		log.Println(err)
 	}
 }
+type result struct {
+	Result bool `json:"result"`
+	ErrorMsg string `json:"errorMsg"`
+}
+var res result
 func main() {
 	//登录页
 	const loginUrl = "http://passport2.chaoxing.com/api/login?"
@@ -47,6 +53,15 @@ func main() {
 	}
 	//登录
 	loginOp := CreateCollector()
+	loginOp.OnResponse(func(resb *colly.Response) {
+		json.Unmarshal(resb.Body,&res)
+	})
+	if res.Result == false{
+		log.Println(res.ErrorMsg)
+		fmt.Scanln()
+		return
+	}
+
 	err := loginOp.Post(loginUrl, loginInfoMap)
 	if err!=nil{
 		log.Println("登陆出错：" , err)
