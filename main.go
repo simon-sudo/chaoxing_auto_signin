@@ -56,21 +56,22 @@ func main() {
 		"pwd":     conf.Pwd,
 		"fid":     conf.Fid,
 		"verify":  conf.Verify,
-		"token":   "",
+		"getToken":   "",
 		"uid":     "",
 	}
 
 	//登录
 
 	loginOp, err := handleLogin(loginUrl)
-	fmt.Println("token = ", userInfoMap["token"], "uid = ", userInfoMap["uid"])
 	if err != nil {
-		log.Println("登录错误：", err)
+		log.Println("登录失败：", err)
+		fmt.Scanln()
 		return
 	}
+	fmt.Println("登录成功！")
+	fmt.Println("Fxcking chaoxing")
 	for {
 		//处理课程活动页面
-		fmt.Println("Fxck chaoxing")
 		for ind := range conf.ClassId {
 			course := Course{
 				CourseId: conf.CourseId[ind],
@@ -81,6 +82,48 @@ func main() {
 		}
 		time.Sleep(time.Second*60)
 	}
+}
+func CreateCollector() *colly.Collector {
+	coll := colly.NewCollector()
+	coll.AllowURLRevisit = true
+	coll.OnRequest(func(r *colly.Request) {
+		r.Headers.Set("Accept-Language", "zh,zh-TW;q=0.9,en-US;q=0.8,en;q=0.7,zh-CN;q=0.6,ru;q=0.5")
+		r.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36")
+		r.Headers.Set("Referer", "http://passport2.chaoxing.com/login?fid=&refer=http://i.mooc.chaoxing.com")
+		r.Headers.Set("Proxy-Connection", "keep-alive")
+	})
+	return coll
+}
+type result struct {
+	Result bool `json:"result"`
+	ErrorMsg string `json:"errorMsg"`
+}
+var res result
+func handleLogin(loginUrl string) (*colly.Collector, error) {
+	loginOp := CreateCollector()
+	loginOp.OnResponse(func(resb *colly.Response) {
+		json.Unmarshal(resb.Body,&res)
+	})
+	err := loginOp.Post(loginUrl, map[string]string{
+		"name":    conf.Account,
+		"pwd":     conf.Pwd,
+		"fid":     conf.Fid,
+		"verify":  conf.Verify,
+	})
+	if res.Result == false{
+		return nil,fmt.Errorf(res.ErrorMsg)
+	}
+	if err != nil {
+		return nil, err
+	}
+	userInfoMap["getToken"] = getToken(loginOp)
+	for _, val := range loginOp.Cookies("http://i.mooc.chaoxing.com/space") {
+		if val.Name == "_uid" {
+			userInfoMap["uid"] = val.Value
+			break
+		}
+	}
+	return loginOp, nil
 }
 func handleCourse(coursePage *colly.Collector,course Course) {
 	coursePage.OnHTML("#startList .Mct", func(element *colly.HTMLElement) {
@@ -97,42 +140,6 @@ func handleCourse(coursePage *colly.Collector,course Course) {
 
 	_ = coursePage.Visit("https://mobilelearn.chaoxing.com/widget/pcpick/stu/index?courseId=" + course.CourseId + "&jclassId=" + course.ClassId)
 }
-func CreateCollector() *colly.Collector {
-	coll := colly.NewCollector()
-	coll.AllowURLRevisit = true
-	coll.OnRequest(func(r *colly.Request) {
-		r.Headers.Set("Accept-Language", "zh,zh-TW;q=0.9,en-US;q=0.8,en;q=0.7,zh-CN;q=0.6,ru;q=0.5")
-		r.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36")
-		r.Headers.Set("Referer", "http://passport2.chaoxing.com/login?fid=&refer=http://i.mooc.chaoxing.com")
-		r.Headers.Set("Proxy-Connection", "keep-alive")
-	})
-	return coll
-}
-func handleLogin(loginUrl string) (*colly.Collector, error) {
-	loginOp := CreateCollector()
-	loginOp.OnResponse(func(res *colly.Response) {
-
-	})
-	fmt.Println(conf)
-	err := loginOp.Post(loginUrl, map[string]string{
-		"name":    conf.Account,
-		"pwd":     conf.Pwd,
-		"fid":     conf.Fid,
-		"verify":  conf.Verify,
-	})
-	if err != nil {
-		log.Println("登陆出错：", err)
-		return loginOp, err
-	}
-	userInfoMap["token"] = token(loginOp)
-	for _, val := range loginOp.Cookies("http://i.mooc.chaoxing.com/space") {
-		if val.Name == "_uid" {
-			userInfoMap["uid"] = val.Value
-			break
-		}
-	}
-	return loginOp, nil
-}
 func handleActive(activeOp *colly.Collector, activeType, activeId, url string) {
 
 	if activeType == "2" {
@@ -145,7 +152,7 @@ func handleSignin(activeOp *colly.Collector, activeId, url string) {
 	fmt.Println("处理签到活动：", activeId)
 	resBody := string(normalSignin(activeOp, url).Body)
 	if strings.Index(resBody, "签到成功") != -1 {
-		fmt.Println("签到成功或已签到")
+		fmt.Println("签到成功！")
 		return
 	}
 	if strings.Index(resBody, "拍照签到") != -1 {
@@ -210,7 +217,7 @@ func gestureSignin(gestureSigninOp *colly.Collector, activeId string)string {
 	})
 	return resBody
 }
-func token(tokenOp *colly.Collector) string {
+func getToken(tokenOp *colly.Collector) string {
 	type t struct {
 		Token string `json:"_token"`
 	}
@@ -223,7 +230,7 @@ func token(tokenOp *colly.Collector) string {
 		}
 		tokenStr = m.Token
 	})
-	_ = tokenOp.Visit("https://pan-yz.chaoxing.com/api/token/uservalid")
+	_ = tokenOp.Visit("https://pan-yz.chaoxing.com/api/getToken/uservalid")
 	return tokenStr
 }
 func photoUpload(photoUploadOp *colly.Collector) (string, error) {
@@ -251,7 +258,7 @@ func photoUpload(photoUploadOp *colly.Collector) (string, error) {
 	}
 	fieldMap := map[string]string{
 		"puid":   userInfoMap["uid"],
-		"_token": userInfoMap["token"],
+		"_token": userInfoMap["getToken"],
 	}
 	for k, v := range fieldMap {
 		_ = writer.WriteField(k, v)
