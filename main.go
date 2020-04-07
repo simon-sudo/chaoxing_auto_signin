@@ -20,13 +20,11 @@ import (
 )
 
 var userInfoMap = make(map[string]string)
-type Course struct {
-	CourseId string
-	ClassId string
-}
+var isExecuted = make(map[string]bool)
 type Config struct {
 	CourseId []string 	`json:"CourseId"`
 	ClassId []string	`json:"ClassId"`
+	CourseName []string `json:"CourseName"`
 	Account string		`json:"Account"`
 	Pwd string			`json:"Pwd"`
 	Verify string		`json:"Verify"`
@@ -73,14 +71,10 @@ func main() {
 	for {
 		//处理课程活动页面
 		for ind := range conf.ClassId {
-			course := Course{
-				CourseId: conf.CourseId[ind],
-				ClassId:  conf.ClassId[ind],
-			}
 			coursePage := loginOp.Clone()
-			handleCourse(coursePage, course)
+			handleCourse(coursePage, ind)
 		}
-		time.Sleep(time.Second*60)
+		time.Sleep(time.Second*120)
 	}
 }
 func CreateCollector() *colly.Collector {
@@ -125,7 +119,7 @@ func handleLogin(loginUrl string) (*colly.Collector, error) {
 	}
 	return loginOp, nil
 }
-func handleCourse(coursePage *colly.Collector,course Course) {
+func handleCourse(coursePage *colly.Collector,ind int) {
 	coursePage.OnHTML("#startList .Mct", func(element *colly.HTMLElement) {
 		s := element.Attr("onclick")
 		reg1 := regexp.MustCompile(`\(\d+`)
@@ -135,21 +129,25 @@ func handleCourse(coursePage *colly.Collector,course Course) {
 		activeId = activeId[1:]
 		activeType = activeType[1 : len(activeType)-1]
 		activeOp := coursePage.Clone()
-		handleActive(activeOp, activeType, activeId, "https://mobilelearn.chaoxing.com/widget/sign/pcStuSignController/preSign?activeId="+activeId+"&classId="+course.ClassId+"&fid="+userInfoMap["fid"]+"&courseId="+course.CourseId)
+		handleActive(activeOp, ind,activeType, activeId, "https://mobilelearn.chaoxing.com/widget/sign/pcStuSignController/preSign?activeId="+activeId+"&classId="+conf.ClassId[ind]+"&fid="+userInfoMap["fid"]+"&courseId="+conf.CourseId[ind])
 	})
 
-	_ = coursePage.Visit("https://mobilelearn.chaoxing.com/widget/pcpick/stu/index?courseId=" + course.CourseId + "&jclassId=" + course.ClassId)
+	_ = coursePage.Visit("https://mobilelearn.chaoxing.com/widget/pcpick/stu/index?courseId=" + conf.CourseId[ind] + "&jclassId=" + conf.ClassId[ind])
 }
-func handleActive(activeOp *colly.Collector, activeType, activeId, url string) {
+func handleActive(activeOp *colly.Collector,ind int, activeType, activeId, url string) {
 
+	if isExecuted[activeId]{
+		return
+	}
+	isExecuted[activeId]=true
 	if activeType == "2" {
 		//签到活动
-		handleSignin(activeOp, activeId, url)
+		handleSignin(activeOp, ind,activeId, url)
 	}
 }
-func handleSignin(activeOp *colly.Collector, activeId, url string) {
+func handleSignin(activeOp *colly.Collector, ind int,activeId, url string) {
 
-	fmt.Println("处理签到活动：", activeId)
+	fmt.Println("处理签到活动：", conf.CourseName[ind])
 	resBody := string(normalSignin(activeOp, url).Body)
 	if strings.Index(resBody, "签到成功") != -1 {
 		fmt.Println("签到成功！")
